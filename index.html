@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#171717">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="漫畫工坊">
+<link rel="manifest" href="./manifest.webmanifest">
+<title>照片漫畫工坊</title>
+<style>
+:root{color-scheme:dark;--bg:#101114;--panel:#1b1d22;--line:#343740;--accent:#ffcc33;--muted:#aeb3bd}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:18px 0 36px}h1{font-size:25px;margin:4px 0 5px}.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:15px;margin:12px 0}
+label{display:block;font-size:14px;font-weight:650;margin:0 0 8px}
+input[type=text],select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#101114;color:#fff;font-size:16px}
+input[type=file]{width:100%;font-size:14px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
+button{border:0;border-radius:12px;padding:13px 15px;font-size:15px;font-weight:750;cursor:pointer}
+.primary{background:var(--accent);color:#161616;width:100%;margin-top:12px}.secondary{background:#30343c;color:white;width:100%;margin-top:8px}
+#status{font-size:13px;color:var(--muted);margin:10px 0;min-height:18px}
+#thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.thumb{aspect-ratio:1;border-radius:9px;overflow:hidden;background:#30343c;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover}.thumb span{position:absolute;right:4px;top:4px;background:#000b;border-radius:99px;padding:2px 6px;font-size:11px}
+.previewWrap{overflow:auto;text-align:center}
+canvas{width:100%;height:auto;max-width:650px;background:white;border-radius:5px;box-shadow:0 5px 22px #0008}
+.small{font-size:12px;color:var(--muted);line-height:1.5}
+@media(max-width:430px){.grid{grid-template-columns:1fr 1fr}.panel{padding:13px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>📸 照片漫畫工坊</h1>
+  <p class="sub">免費使用・照片在你的裝置上處理・最多 8 張</p>
+
+  <section class="panel">
+    <label for="photos">① 選擇照片（最多 8 張）</label>
+    <input id="photos" type="file" accept="image/*" multiple>
+    <div id="thumbs"></div>
+    <div class="hint">如果一次選取失敗，可以分批選照片；再次選取會以新選擇的照片取代舊照片。</div>
+  </section>
+
+  <section class="panel">
+    <div class="grid">
+      <div><label for="style">② 漫畫風格</label>
+        <select id="style">
+          <option value="anime">日系漫畫</option>
+          <option value="comic">美式漫畫</option>
+          <option value="cute">可愛粉嫩</option>
+          <option value="mono">黑白網點</option>
+        </select>
+      </div>
+      <div><label for="layout">③ 排版方式</label>
+        <select id="layout">
+          <option value="grid">整齊分格</option>
+          <option value="hero">首張大圖</option>
+          <option value="strip">直式連環格</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px"><label for="title">④ 漫畫標題</label>
+      <input id="title" type="text" maxlength="28" placeholder="例如：我的精彩日常">
+    </div>
+    <div style="margin-top:12px"><label for="bubble">⑤ 對話文字（可留空）</label>
+      <input id="bubble" type="text" maxlength="40" placeholder="例如：這也太好玩了吧！">
+    </div>
+    <button class="primary" id="make">✨ 製作漫畫</button>
+    <div id="status" role="status" aria-live="polite">請先選擇照片。</div>
+  </section>
+
+  <section class="panel">
+    <label>⑥ 漫畫預覽</label>
+    <div class="previewWrap"><canvas id="canvas" width="1080" height="1350"></canvas></div>
+    <button class="primary" id="save">⬇️ 儲存漫畫圖片</button>
+    <button class="secondary" id="share">分享／儲存到照片</button>
+    <p class="small">iPhone 若按儲存沒有反應，請按「分享／儲存到照片」；也可以在開啟的圖片上長按，選擇「加入照片」。</p>
+  </section>
+  <p class="small">提醒：目前提供漫畫版面、色調與濾鏡效果，並非 AI 將人物重新繪製成漫畫。照片不會上傳到本網站伺服器。</p>
+</main>
+<script>
+const photoInput=document.getElementById('photos'), thumbs=document.getElementById('thumbs');
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+const statusEl=document.getElementById('status');
+let photos=[], ready=false;
+const palettes={
+ anime:{bg:'#fff9ed',ink:'#151515',accent:'#f7b8c7',filter:'saturate(1.25) contrast(1.08)'},
+ comic:{bg:'#ffe34d',ink:'#111',accent:'#ef3340',filter:'saturate(1.5) contrast(1.28)'},
+ cute:{bg:'#ffe9f1',ink:'#663b54',accent:'#ff9fbd',filter:'saturate(1.12) brightness(1.06)'},
+ mono:{bg:'#fff',ink:'#111',accent:'#bbb',filter:'grayscale(1) contrast(1.25)'}
+};
+photoInput.addEventListener('change',()=>{
+ const files=Array.from(photoInput.files||[]).filter(f=>f.type.startsWith('image/')).slice(0,8);
+ photos=[]; thumbs.innerHTML=''; ready=false;
+ if(!files.length){statusEl.textContent='尚未選擇照片。';return}
+ statusEl.textContent='正在讀取照片…';
+ let done=0;
+ files.forEach((file,i)=>{
+  const url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{photos[i]=img;done++;const d=document.createElement('div');d.className='thumb';d.innerHTML='<span>'+(i+1)+'</span>';d.appendChild(img.cloneNode());thumbs.appendChild(d);
+   if(done===files.length){photos=photos.filter(Boolean);statusEl.textContent='已載入 '+photos.length+' 張照片，可以製作漫畫。';}
+  };
+  img.onerror=()=>{done++;if(done===files.length)statusEl.textContent='部分照片讀取失敗，請重新選取。'};
+  img.src=url;
+ });
+ if((photoInput.files||[]).length>8)statusEl.textContent='最多使用 8 張照片，已先取前 8 張。';
+});
+function roundedRect(c,x,y,w,h,r,fill,stroke,lw=8){
+ c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();
+ if(fill){c.fillStyle=fill;c.fill()} if(stroke){c.lineWidth=lw;c.strokeStyle=stroke;c.stroke()}
+}
+function drawCover(img,x,y,w,h,filter){
+ const ir=img.width/img.height, r=w/h;let sx=0,sy=0,sw=img.width,sh=img.height;
+ if(ir>r){sw=img.height*r;sx=(img.width-sw)/2}else{sh=img.width/r;sy=(img.height-sh)/2}
+ ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.filter=filter;ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);ctx.restore();ctx.filter='none';
+}
+function makeComic(){
+ if(!photos.length){statusEl.textContent='請先選擇至少 1 張照片。';return}
+ const style=document.getElementById('style').value,p=palettes[style],layout=document.getElementById('layout').value;
+ const title=document.getElementById('title').value.trim()||'我的漫畫日常',bubble=document.getElementById('bubble').value.trim();
+ const W=1080, pad=34, gap=18, header=150, footer=42;
+ let H=1350;if(layout==='strip')H=Math.max(1350,260+photos.length*510);
+ canvas.width=W;canvas.height=H;
+ ctx.fillStyle=p.bg;ctx.fillRect(0,0,W,H);
+ // halftone background dots
+ if(style==='comic'||style==='mono'){ctx.fillStyle=style==='mono'?'#ddd':'#f5c928';for(let y=10;y<H;y+=24)for(let x=10;x<W;x+=24){ctx.beginPath();ctx.arc(x,y,2.2,0,Math.PI*2);ctx.fill()}}
+ ctx.fillStyle=p.ink;ctx.textAlign='center';ctx.font='900 64px -apple-system,BlinkMacSystemFont,sans-serif';
+ ctx.fillText(title,W/2,100, W-80);
+ ctx.fillStyle=p.accent;ctx.fillRect(pad,125,W-pad*2,12);
+ const top=165, bottom=H-footer, availH=bottom-top;
+ const boxes=[];
+ if(layout==='strip'){
+  const h=(availH-gap*(photos.length-1))/photos.length;
+  photos.forEach((_,i)=>boxes.push({x:pad,y:top+i*(h+gap),w:W-pad*2,h}));
+ }else if(layout==='hero'&&photos.length>1){
+  const heroH=Math.round(availH*.53);
+  boxes.push({x:pad,y:top,w:W-pad*2,h:heroH});
+  const n=photos.length-1,cols=Math.min(3,n),rows=Math.ceil(n/cols),cellW=(W-pad*2-gap*(cols-1))/cols,cellH=(availH-heroH-gap*(rows))/rows;
+  for(let i=1;i<photos.length;i++){let j=i-1;boxes.push({x:pad+(j%cols)*(cellW+gap),y:top+heroH+gap+Math.floor(j/cols)*(cellH+gap),w:cellW,h:cellH})}
+ }else{
+  const cols=photos.length===1?1:2,rows=Math.ceil(photos.length/cols),cellW=(W-pad*2-gap*(cols-1))/cols,cellH=(availH-gap*(rows-1))/rows;
+  photos.forEach((_,i)=>boxes.push({x:pad+(i%cols)*(cellW+gap),y:top+Math.floor(i/cols)*(cellH+gap),w:cellW,h:cellH}));
+ }
+ boxes.forEach((b,i)=>{
+  ctx.save();ctx.shadowColor='#0005';ctx.shadowBlur=10;ctx.shadowOffsetY=5;
+  roundedRect(ctx,b.x,b.y,b.w,b.h,8,'#fff',p.ink,style==='cute'?5:10);ctx.restore();
+  ctx.save();ctx.beginPath();ctx.rect(b.x+8,b.y+8,b.w-16,b.h-16);ctx.clip();
+  drawCover(photos[i],b.x+8,b.y+8,b.w-16,b.h-16,p.filter);ctx.restore();
+  if(style==='comic'){ctx.fillStyle='#111';ctx.font='900 32px sans-serif';ctx.fillText(i===0?'POW!':i===1?'WOW!':'!',b.x+75,b.y+60)}
+  if(bubble&&i===0){
+   const bw=Math.min(b.w*.72,Math.max(210,bubble.length*34+65)),bh=90,bx=b.x+b.w-bw-22,by=b.y+20;
+   ctx.save();roundedRect(ctx,bx,by,bw,bh,22,'#fff','#111',6);
+   ctx.fillStyle='#111';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.fillText(bubble,bx+bw/2,by+57,bw-24);ctx.restore();
+  }
+ });
+ ctx.fillStyle=p.ink;ctx.textAlign='center';ctx.font='bold 22px sans-serif';ctx.fillText('PHOTO COMIC STUDIO',W/2,H-14);
+ ready=true;statusEl.textContent='漫畫完成！可以預覽並儲存。';
+}
+document.getElementById('make').addEventListener('click',makeComic);
+function canvasBlob(){return new Promise(resolve=>canvas.toBlob(resolve,'image/png'))}
+async function saveImage(){
+ if(!ready){statusEl.textContent='請先按「製作漫畫」。';return}
+ const blob=await canvasBlob();if(!blob){statusEl.textContent='圖片產生失敗，請再試一次。';return}
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='我的漫畫.png';document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),30000);statusEl.textContent='已送出儲存。若 iPhone 沒有下載，請使用下方分享按鈕。';
+}
+async function shareImage(){
+ if(!ready){statusEl.textContent='請先按「製作漫畫」。';return}
+ const blob=await canvasBlob();if(!blob){statusEl.textContent='圖片產生失敗。';return}
+ const file=new File([blob],'我的漫畫.png',{type:'image/png'});
+ try{
+  if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'我的漫畫'});statusEl.textContent='請在分享選單選擇「儲存影像」或「儲存到照片」。'}
+  else{const url=URL.createObjectURL(blob);const win=window.open(url,'_blank');if(!win){const a=document.createElement('a');a.href=url;a.download='我的漫畫.png';a.click()}statusEl.textContent='已開啟漫畫圖片，請長按圖片並選擇「加入照片」。';setTimeout(()=>URL.revokeObjectURL(url),60000)}
+ }catch(e){if(e.name!=='AbortError')statusEl.textContent='分享未完成，請再試一次或使用儲存按鈕。'}
+}
+document.getElementById('save').addEventListener('click',saveImage);
+document.getElementById('share').addEventListener('click',shareImage);
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body>
+</html>

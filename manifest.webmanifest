@@ -1,0 +1,9 @@
+{
+  "name": "照片漫畫工坊",
+  "short_name": "漫畫工坊",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101114",
+  "theme_color": "#171717",
+  "icons": []
+}
